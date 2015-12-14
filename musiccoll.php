@@ -1,10 +1,11 @@
 <?php
 // need metaflac (package flac) to get flactags
-// need shntool, shnsplit (package shntool) to get flac info and split file
+// need shntool, shnsplit, shnconv (package shntool) to get flac info and split file
 // need cuebreakpoints, cuetag (package cuetools) to get cue info and tag file
+// need ffmpeg to conver ape to wav
 
 define ('script_name', 'Music Collectioner v1.0');
-define ('library', '/home/aslok/Музыка неразобранная/');
+define ('library', '/Users/aslok/Downloads/');
 
 // for last.fm api
 define ('api_url', 'http://ws.audioscrobbler.com/2.0/');
@@ -128,7 +129,7 @@ foreach ($flacs as $flac_file)
 		printv('Новое название: ' . $title . N);
 		if (!isset ($args['-ro']) && !isset ($args['-st']))
 		{
-			exec_program(	'metaflac --set-tag="TITLE=' . $title . '" "' . $flac_file . '"');
+			exec_program(	'metaflac --set-tag="TITLE=' . $title . '" ' . escapeshellarg($flac_file));
 		}
 		elseif (isset ($args['-st']))
 		{
@@ -290,7 +291,7 @@ foreach ($flacs as $flac_file)
 		$new_split_track_dirname = 	$artist_dirname . '/' .
 						$cue_info['year'] . ' - ' .
 						($album['title'] ? $album['title'] : $cue_info['album']) .
-						(($album['disc'] ? $album['disc'] : $cue_info['disc']) !== '' ?
+						((isset ($album['disc']) && $album['disc'] ? $album['disc'] : $cue_info['disc']) !== '' ?
 							(' (CD' . ($album['disc'] ? $album['disc'] : $cue_info['disc']) . ')') :
 							'');
 		if (!file_exists($artist_dirname))
@@ -359,7 +360,7 @@ function set_tags(	$flac_file, $artist = '', $album = '', $year = '', $title = '
 	$img_import = '';
 	if ($image_file)
 	{
-		$img_import = '--import-picture-from="' . $image_file . '"';
+		$img_import = '--import-picture-from=' . escapeshellarg($image_file);
 	}
 
 	$ext_tags = '';
@@ -375,11 +376,11 @@ function set_tags(	$flac_file, $artist = '', $album = '', $year = '', $title = '
 	if ($asin !== '') $ext_tags .= ' --set-tag="asin=' . $asin . '"';
 	if ($albumartistsort !== '') $ext_tags .= ' --set-tag="albumartistsort=' . $albumartistsort . '"';
 	if ($artistsort !== '') $ext_tags .= ' --set-tag="artistsort=' . $artistsort . '"';
-	$ext_tags .= ' --set-tag="script=' . $script !== '' ? $script : script_name . '"';
+	$ext_tags .= ' --set-tag="script=' . ($script !== '' ? $script : script_name) . '"';
 
-	exec_program(	'metaflac --remove --block-type=PICTURE "' . $flac_file . '"; ' .
+	exec_program(	'metaflac --remove --block-type=PICTURE ' . escapeshellarg($flac_file) . '; ' .
 			'metaflac --remove-all-tags ' . $img_import .
-				'  --set-tag="ARTIST=' . $artist .
+				' --set-tag="ARTIST=' . $artist .
 				'" --set-tag="ALBUM=' . $album .
 				'" --set-tag="TITLE=' . $title .
 				'" --set-tag="DATE=' . $year .
@@ -387,7 +388,7 @@ function set_tags(	$flac_file, $artist = '', $album = '', $year = '', $title = '
 				'" --set-tag="GENRE=' . $genre .
 				'" --set-tag="TRACKTOTAL=' . $tracktotal .
 				'" --set-tag="COMMENT=' . $comment .
-				'"' . $ext_tags . ' "' . $flac_file . '"');
+				'"' . $ext_tags . ' ' . escapeshellarg($flac_file));
 }
 
 
@@ -554,14 +555,14 @@ function ape2flac($ape_path)
 	{
 		if (!file_exists($wav_path))
 		{
-			$data = exec_program('mac "' . $ape_path . '" "' . $wav_path . '" -d' . $output);
+			$data = exec_program('ffmpeg -i ' . escapeshellarg($ape_path) . ' ' . escapeshellarg($wav_path) . $output);
 			printv('Файл сохранен: ' . $wav_path . N);
 		}
 		else
 		{
 			printv('Найден файл: ' . $wav_path . N);
 		}
-		$data = exec_program('flac --delete-input-file --compression-level-8 --best -V "' . $wav_path . '" -o "' . $flac_path . '"' . $output);
+		$data = exec_program('flac --delete-input-file --compression-level-8 --best -V ' . escapeshellarg($wav_path) . ' -o ' . escapeshellarg($flac_path) . $output);
 		printv('Файл сохранен: ' . $flac_path . N);
 		printv('Файл удален: ' . $wav_path . N);
 	}
@@ -585,14 +586,14 @@ function wv2flac($wv_path)
 	{
 		if (!file_exists($wav_path))
 		{
-			$data = exec_program('wvunpack -cc "' . $wv_path . '" -o "' . $wav_path . '"' . $output);
+			$data = exec_program('wvunpack -cc ' . escapeshellarg($wv_path) . ' -o ' . escapeshellarg($wav_path) . '' . $output);
 			printv('Файл сохранен: ' . $wav_path . N);
 		}
 		else
 		{
 			printv('Найден файл: ' . $wav_path . N);
 		}
-		$data = exec_program('flac --delete-input-file --compression-level-8 --best -V "' . $wav_path . '" -o "' . $flac_path . '"' . $output);
+		$data = exec_program('flac --delete-input-file --compression-level-8 --best -V ' . escapeshellarg($wav_path) . ' -o ' . escapeshellarg($flac_path) . $output);
 		printv('Файл сохранен: ' . $flac_path . N);
 		printv('Файл удален: ' . $wav_path . N);
 	}
@@ -614,8 +615,8 @@ function split_cueflac($path, $cue)
 		{
 			mkdir($out_dir);
 		}
-		$data = exec_program(	'cuebreakpoints --prepend-gaps -i cue "' . str_replace('!', '"\'!\'"', $cue) .
-					'" 2> /dev/null | shnsplit -o flac -O never -d "' . $out_dir . '" "' . $path . '"' . $output);
+		$data = exec_program(	'cuebreakpoints --prepend-gaps -i cue ' . escapeshellarg($cue) .
+					' 2> /dev/null | shnsplit -o flac -O never -d ' . escapeshellarg($out_dir) . ' ' . escapeshellarg($path) . '' . $output);
 		printv('Треки сохранены: ' . $out_dir . N);
 	}
 	else
@@ -718,7 +719,7 @@ function get_album($mbid)
 function get_file_length($path, $type = 'flac')
 {
 	$out = '0:0';
-	$data = exec_program('shntool len -c -t -i ' . $type . ' "' . $path . '"');
+	$data = exec_program('shntool len -c -t -i ' . $type . ' ' . escapeshellarg($path));
 	if (preg_match_all('/^\s+(\d+:\d+)\.\d+\s+/s', $data, $match))
 	{
 		$out = $match[1][0];
@@ -816,7 +817,7 @@ function short_realese($name)
 function get_flac_tags($path)
 {
 	$out = array ();
-	$data = exec_program('metaflac --list "' . $path . '"', false);
+	$data = exec_program('metaflac --list ' . escapeshellarg($path), false);
 	if (preg_match_all('/comment\[\d+\]: (\w+)="?([\w\.,\(\)а-я:\s+"\'-]*)"?' . N . '\s?/uis', $data, $match))
 	{
 		foreach ($match[1] as $key => $match_key)
@@ -870,7 +871,8 @@ function search_ext($ext, $dir = false, $recur = false)
 		$dir = dirname($dir);
 		$offset = strlen($file) - $ext_len;
 		$full_name = $dir . '/' . $file;
-		if ($offset >= 0 && false !== strpos($file, '.' . $ext, $offset))
+		if ($offset >= 0 && (false !== strpos($file, '.' . $ext, $offset) ||
+				     false !== strpos($file, '.' . strtoupper($ext), $offset)))
 		{
 			$out[] = $full_name;
 		}
@@ -889,7 +891,8 @@ function search_ext($ext, $dir = false, $recur = false)
 		}
 		$offset = strlen($file) - $ext_len;
 		$full_name = $dir . '/' . $file;
-		if ($offset >= 0 && false !== strpos($file, '.' . $ext, $offset))
+		if ($offset >= 0 && (false !== strpos($file, '.' . $ext, $offset) ||
+				     false !== strpos($file, '.' . strtoupper($ext), $offset)))
 		{
 			$out[] = $full_name;
 		}
