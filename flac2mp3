@@ -1,0 +1,231 @@
+#!/bin/bash
+# flac2mp3.sh --- скрипт для конвертации FLAC файлов в MP3
+# Александр Симаков, <xdr (тчк) box на Google Mail>
+# http://alexander-simakov.blogspot.com/
+#
+# flac2mp3 --- переделал немножко
+# Виталий Фуст
+# <aslok (тчк) zp на Google Mail>
+#
+
+# Какие программы где находятся
+LAME="lame"
+FLAC="flac"
+METAFLAC="metaflac"
+ICONV="iconv"
+ID3V2="id3v2"
+
+# Настройки LAME по-умолчанию
+DEFAULT_LAME_OPTS="-b 320 -h"
+
+# Эта функция извлекает из FLAC-файла мета-информацию
+# и формирует соответствующую последовательность
+# опций для записи тегов.
+
+function get_id3v1_opts()
+{
+	flac_file="$1"
+
+	$METAFLAC --export-tags-to - "$flac_file" | while read -d $'\n' tag; do
+	tag_name=$(echo "$tag" | awk -F= '{ print $1 }')
+	tag_value=$(echo "$tag" | awk -F= '{ print $2 }' | sed 's/"/\\"/g')
+
+	echo -n "--id3v1-only "
+
+	case "$tag_name" in
+		'TITLE')
+		echo -n "--song \"$tag_value\" "
+		;;
+		'title')
+		echo -n "--song \"$tag_value\" "
+		;;
+		'ARTIST')
+		echo -n "--artist \"$tag_value\" "
+		;;
+		'artist')
+		echo -n "--artist \"$tag_value\" "
+		;;
+		'ALBUM')
+		echo -n "--album \"$tag_value\" "
+		;;
+		'album')
+		echo -n "--album \"$tag_value\" "
+		;;
+		'GENRE')
+		echo -n "--genre \"$tag_value\" "
+		;;
+		'genre')
+		echo -n "--genre \"$tag_value\" "
+		;;
+		'DATE')
+		OIFS="$IFS"
+		IFS=".:-_/ "
+		tag_value=($tag_value);
+		tag_value=${tag_value[0]}
+		IFS="$OIFS"
+		echo -n "--year \"$tag_value\" "
+		;;
+		'date')
+		OIFS="$IFS"
+		IFS=".:-_/ "
+		tag_value=($tag_value);
+		tag_value=${tag_value[0]}
+		IFS="$OIFS"
+		echo -n "--year \"$tag_value\" "
+		;;
+		'TRACKNUMBER')
+		echo -n "--track \"$tag_value\" "
+		;;
+		'tracknumber')
+		echo -n "--track \"$tag_value\" "
+		;;
+	esac
+	done
+}
+
+function get_id3v2_opts()
+{
+	flac_file="$1"
+	flac_art_file="$2"
+
+	echo -n "--add-id3v2 "
+
+	$METAFLAC --export-tags-to - "$flac_file" | while read -d $'\n' tag; do
+	tag_name=$(echo "$tag" | awk -F= '{ print $1 }')
+	tag_value=$(echo "$tag" | awk -F= '{ print $2 }' | sed 's/"/\\"/g')
+
+	case "$tag_name" in
+		'TITLE')
+		echo -n "--tt \"$tag_value\" "
+		;;
+		'title')
+		echo -n "--tt \"$tag_value\" "
+		;;
+		'ARTIST')
+		echo -n "--ta \"$tag_value\" "
+		;;
+		'artist')
+		echo -n "--ta \"$tag_value\" "
+		;;
+		'ALBUM')
+		echo -n "--tl \"$tag_value\" "
+		;;
+		'album')
+		echo -n "--tl \"$tag_value\" "
+		;;
+		'GENRE')
+		echo -n "--tg \"$tag_value\" "
+		;;
+		'genre')
+		echo -n "--tg \"$tag_value\" "
+		;;
+		'DATE')
+		OIFS="$IFS"
+		IFS=".:-_/ "
+		tag_value=($tag_value);
+		tag_value=${tag_value[0]}
+		IFS="$OIFS"
+		echo -n "--ty \"$tag_value\" "
+		;;
+		'date')
+		OIFS="$IFS"
+		IFS=".:-_/ "
+		tag_value=($tag_value);
+		tag_value=${tag_value[0]}
+		IFS="$OIFS"
+		echo -n "--ty \"$tag_value\" "
+		;;
+		'TRACKNUMBER')
+		echo -n "--tn \"$tag_value\" "
+		;;
+		'tracknumber')
+		echo -n "--tn \"$tag_value\" "
+		;;
+	esac
+	done
+
+	if [[ -f "$flac_art_file" ]]
+	then
+		echo -n "--ti \"$flac_art_file\""
+	fi
+}
+
+# Эта функция формирует имя mp3-файла и создает
+# необходимые директории.
+function make_mp3_file_name()
+{
+	input_dir="$1"
+	output_dir="$2"
+	flac_file="$3"
+
+	album_dir=$(basename "$input_dir")
+	mp3_file=${flac_file/%flac/mp3}
+	mp3_file=$(echo ${mp3_file/#${input_dir}/${output_dir}/${album_dir}/} | sed 's~//~/~g')
+	mp3_dir=$(dirname "$mp3_file")
+	$(mkdir -p "$mp3_dir")
+
+	echo "$mp3_file"
+}
+
+# Эта функция рекурсивно конвертирует FLAC-файлы из
+# директории input_dir в директорию output_dir.
+# Директория output_dir создается автоматически.
+function main()
+{
+	input_dir=$1
+	output_dir=$2
+	lame_opts=$3
+
+	if [[ -z "$input_dir" || -z "$output_dir" ]]; then
+		echo "Usage: $0 <input_dir> <output_dir> [lame_opts]"
+		echo "Example: $0 /tmp/my/flac/albums /tmp/my/mp3 \"-b 320 -h\""
+		exit 1
+	fi
+
+	if [[ -f "$input_dir" ]]; then
+		input_dir=$(dirname "$input_dir")
+	fi
+
+	if [[ -z "$lame_opts" ]]; then
+		lame_opts=$DEFAULT_LAME_OPTS
+	fi
+
+	OIFS=$IFS; IFS=$'\n'
+
+	# Рекурсивно обрабатываем все FLAC-файлы
+	for flac_file in $(find "$1" -name "*.flac" | sort); do
+		echo "================================================================================================================================"
+		echo "Processing '$flac_file'..."
+		echo "--------------------------------------------------------------------------------------------------------------------------------"
+
+		flac_file_enc=$(echo "$flac_file" | sed 's~"~\\"~g')
+		flac_dir=$(dirname "$flac_file")
+		flac_art_file=$flac_dir/cover.jpg
+
+		mp3_file=$(make_mp3_file_name "$input_dir" "$output_dir" "$flac_file")
+
+		mp3_file_enc=$(echo "$mp3_file" | sed 's~"~\\"~g')
+		mp3_dir=$(dirname "$mp3_file")
+		mp3_art_file=$mp3_dir/cover.jpg
+
+		id3v1_opts=$(get_id3v1_opts "$flac_file")
+		id3v1_opts_enc=$(echo "$id3v1_opts" | $ICONV -f UTF-8 -t CP1251)
+		id3v2_opts=$(get_id3v2_opts "$flac_file" "$flac_art_file")
+
+		echo "$mp3_file..."
+		cmd="$FLAC -sdc \"$flac_file_enc\" | $LAME --quiet $id3v2_opts $lame_opts - \"$mp3_file_enc\""
+		eval "$cmd"
+		cmd="$ID3V2 $id3v1_opts_enc \"$mp3_file_enc\""
+		eval "$cmd"
+
+		if [[ -f "$mp3_art_file" ]]; then
+			continue
+		fi
+		if [[ -f "$flac_art_file" ]]; then
+			cp "$flac_art_file" "$mp3_dir"
+			continue;
+		fi
+	done
+}
+
+main "$@"
