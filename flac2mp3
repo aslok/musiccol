@@ -26,44 +26,24 @@ function get_id3v1_opts()
 {
 	flac_file="$1"
 
-	$METAFLAC --export-tags-to - "$flac_file" | while read -d $'\n' tag; do
-	tag_name=$(echo "$tag" | awk -F= '{ print $1 }')
-	tag_value=$(echo "$tag" | awk -F= '{ print $2 }' | sed 's/"/\\"/g')
-
 	echo -n "--id3v1-only "
 
+	$METAFLAC --export-tags-to - "$flac_file" | while read -d $'\n' tag; do
+	tag_name=$(echo "$tag" | awk -F= '{ print $1 }' | tr '[:upper:]' '[:lower:]')
+	tag_value=$(echo "$tag" | awk -F= '{ print $2 }' | sed 's/"/\\"/g')
+
 	case "$tag_name" in
-		'TITLE')
-		echo -n "--song \"$tag_value\" "
-		;;
 		'title')
 		echo -n "--song \"$tag_value\" "
-		;;
-		'ARTIST')
-		echo -n "--artist \"$tag_value\" "
 		;;
 		'artist')
 		echo -n "--artist \"$tag_value\" "
 		;;
-		'ALBUM')
-		echo -n "--album \"$tag_value\" "
-		;;
 		'album')
 		echo -n "--album \"$tag_value\" "
 		;;
-		'GENRE')
-		echo -n "--genre \"$tag_value\" "
-		;;
 		'genre')
 		echo -n "--genre \"$tag_value\" "
-		;;
-		'DATE')
-		OIFS="$IFS"
-		IFS=".:-_/ "
-		tag_value=($tag_value);
-		tag_value=${tag_value[0]}
-		IFS="$OIFS"
-		echo -n "--year \"$tag_value\" "
 		;;
 		'date')
 		OIFS="$IFS"
@@ -72,9 +52,6 @@ function get_id3v1_opts()
 		tag_value=${tag_value[0]}
 		IFS="$OIFS"
 		echo -n "--year \"$tag_value\" "
-		;;
-		'TRACKNUMBER')
-		echo -n "--track \"$tag_value\" "
 		;;
 		'tracknumber')
 		echo -n "--track \"$tag_value\" "
@@ -91,41 +68,21 @@ function get_id3v2_opts()
 	echo -n "--add-id3v2 "
 
 	$METAFLAC --export-tags-to - "$flac_file" | while read -d $'\n' tag; do
-	tag_name=$(echo "$tag" | awk -F= '{ print $1 }')
+	tag_name=$(echo "$tag" | awk -F= '{ print $1 }' | tr '[:upper:]' '[:lower:]')
 	tag_value=$(echo "$tag" | awk -F= '{ print $2 }' | sed 's/"/\\"/g')
 
 	case "$tag_name" in
-		'TITLE')
-		echo -n "--tt \"$tag_value\" "
-		;;
 		'title')
 		echo -n "--tt \"$tag_value\" "
-		;;
-		'ARTIST')
-		echo -n "--ta \"$tag_value\" "
 		;;
 		'artist')
 		echo -n "--ta \"$tag_value\" "
 		;;
-		'ALBUM')
-		echo -n "--tl \"$tag_value\" "
-		;;
 		'album')
 		echo -n "--tl \"$tag_value\" "
 		;;
-		'GENRE')
-		echo -n "--tg \"$tag_value\" "
-		;;
 		'genre')
 		echo -n "--tg \"$tag_value\" "
-		;;
-		'DATE')
-		OIFS="$IFS"
-		IFS=".:-_/ "
-		tag_value=($tag_value);
-		tag_value=${tag_value[0]}
-		IFS="$OIFS"
-		echo -n "--ty \"$tag_value\" "
 		;;
 		'date')
 		OIFS="$IFS"
@@ -134,9 +91,6 @@ function get_id3v2_opts()
 		tag_value=${tag_value[0]}
 		IFS="$OIFS"
 		echo -n "--ty \"$tag_value\" "
-		;;
-		'TRACKNUMBER')
-		echo -n "--tn \"$tag_value\" "
 		;;
 		'tracknumber')
 		echo -n "--tn \"$tag_value\" "
