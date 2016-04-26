@@ -1,3 +1,7 @@
 #!/usr/bin/env bash
-PWD=$(cd $(dirname $0) && pwd)
+REALNAME=$0
+while [ -n "$(readlink "$REALNAME")" ]; do
+    REALNAME=$(readlink "$REALNAME")
+done
+PWD=$(dirname "$REALNAME")
 $(which php) -f "$PWD/musiccoll.php"  
